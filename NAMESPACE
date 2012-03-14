@@ -1,0 +1,11 @@
+export(dplr,
+       dplr.formula,
+       dplr.numeric,
+       dplr.factor,
+       dplr.logical,
+       dplr.data.frame,
+       dplr.matrix,
+       predict.dplr,
+       print.dplr,
+       summary.dplr)
+       
