@@ -1,12 +1,13 @@
 Package: PrivateLR
 Type: Package
 Title: Differentially private regularized logistic regression
-Version: 1.0-21
-Date: 2012-03-14
+Version: 1.1-69
+Date: 2013-05-28
 Author: Staal A. Vinterbo <sav@ucsd.edu>
 Maintainer: Staal A. Vinterbo <sav@ucsd.edu>
 Description: Differentially private regularized logistic regression
 License: GPL (>= 2)
-Packaged: 2012-03-22 21:23:53 UTC; staal
+Packaged: 2013-06-04 16:04:55 UTC; staal
+NeedsCompilation: no
 Repository: CRAN
-Date/Publication: 2012-03-23 05:48:56
+Date/Publication: 2013-06-04 18:14:07

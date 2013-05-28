@@ -7,5 +7,7 @@ export(dplr,
        dplr.matrix,
        predict.dplr,
        print.dplr,
-       summary.dplr)
+       summary.dplr,
+       print.summary.dplr,       
+       scaled)
        
