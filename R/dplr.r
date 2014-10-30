@@ -5,19 +5,19 @@
 # Description:  differentially private logistic regression
 # Author:       Staal Vinterbo
 # Created:      Thu May 16 11:41:22 2013
-# Modified:     Mon Jun  3 14:48:35 2013 (Staal Vinterbo) staal@mats
+# Modified:     Mon Oct 27 18:48:00 2014 (Staal Vinterbo) staal@mats
 # Language:     ESS[S]
 # Package:      N/A
 # Status:       Experimental
 #
-# (c) Copyright 2013, Staal Vinterbo, all rights reserved.
+# (c) Copyright 2013-2014, Staal Vinterbo, all rights reserved.
 #
-# linclass.r is free software; you can redistribute it and/or modify
+# dplr.r is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
-# linclass.r is distributed in the hope that it will be useful,
+# dplr.r is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
@@ -26,6 +26,13 @@
 # along with linclass.r; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
+################################################################################
+#
+# Revisions:
+#
+# Fri Oct 24 18:31:11 2014 (Staal Vinterbo) staal@mats
+#  Fixed error in noise variance, and implemented full algorithm such that 
+#  too small regularizer value does no longer fall back on output perturbation.
 ################################################################################
 
 # L2 norm
@@ -68,7 +75,7 @@ dw.loss.logistic = function(w, x, y) {
 # privacy penalty incurred by regularizer lambda
 penalty = function(lambda, n, cc = 0.25) 2 * log(1 + cc/(n * lambda))
 
-# minimal regularizer for given alpha if we want penalty = alpha - alpha.use
+# suggest regularizer for given alpha if we want penalty = alpha - alpha.use
 lambda.eff = function(alpha, alpha.use, n, cc=0.25)
   cc/n*(1/(exp(0.5 * (alpha - alpha.use)) - 1))
 
@@ -109,61 +116,52 @@ logreg.w = function(y, x, lambda, alpha, op = TRUE, cc = 0.25, verbose = 0, meth
     return(res)
   }
 
-  
-
-  if (alpha > 0) {
-    c.lr = 0.25
-    penalty = 2 * log(1 + c.lr/(n * lambda))
-    if (verbose) cat('dplr: privacy penalty due to regularizer: ', penalty, '\n')
-    alpha.use = alpha - penalty
-  } else { # ordinary non-private 
-    alpha.use = 0
+  # function to do output perturbation
+  do.output = function(alpha.use, lambda) {
+      f = function(w) (0.5 * lambda * sum(w^2)) + loss.logistic(w, x, y)
+      df = function(w) lambda * w + dw.loss.logistic(w, x, y)
+      res = optim(rep(0,d), f, df, method=method)
+      if (alpha.use > 0) # alpha.use = 0 => non-private 
+          res$par = res$par + 2/(alpha.use*lambda*n) * sampleR(d, 1)
+      res
   }
 
-  if (alpha > 0 && alpha.use <= 0 && op == TRUE){
-    ## if readjusting lambda is wanted:
-    #l.req = lambda
-    #new.alpha.use = alpha - 0.8*alpha
-    #lambda = lambda.eff(alpha, new.alpha.use, n)
-    #alpha.use = new.alpha.use
-    #warning('dplr: requested Regularizer ', l.req, ' adjusted to ', lambda, '.')
-    #cat('dplr: requested Regularizer ', l.req, ' adjusted to ', lambda, '\n')
-    # else use output perturbation instead
-    warning('dplr: regularizer too small, using output perturbation.')
-    if (verbose)
-        cat('dplr: requested Regularizer ', lambda, ' too small, using output perturbation.\n')
-    op = FALSE
-    status = 'output.perturbation'
-  }
-  if(verbose) cat('dplr: alpha - penalty: ', alpha.use, '\n')        
-  if (alpha.use > 0)
-    R = sampleR(d, 1)/alpha.use # R = sampleR(d, alpha.use)
-  else
-    R = rep(0, d)
-  
-  if (op) { # objective perturbation
-    f = function(w) {
-      lambda * sum(w^2) + loss.logistic(w, x, y) + 1/n * (R %*% w)
-    }
-    df = function(w) {
-      2 * lambda * w + dw.loss.logistic(w, x, y) + 1/n * R
-    }
-  } else { # output perturbation, R is added at the end
-    f = function(w) {
-      lambda * sum(w^2) * loss.logistic(w, x, y)
-    }
-    df = function(w) {
-      2 * lambda * w + dw.loss.logistic(w, x, y)
-    }
+  # function to do objective perturbation
+  do.perturb = function(alpha.use, lambda) {
+      R = sampleR(d, 1) * 2/(alpha.use * n)
+      f = function(w)
+          (0.5 * lambda * sum(w^2)) + loss.logistic(w, x, y) + (R %*% w)
+      df = function(w) lambda * w + dw.loss.logistic(w, x, y) + R
+      optim(rep(0,d), f, df, method=method)
   }
 
-  res = optim(rep(0,d), f, df, method=method)#'BFGS')
+  if(op) {
+      penalty = 2 * log(1 + cc/(n * lambda))
+      alpha.use = alpha - penalty
+      if (verbose) {
+          cat('dplr: privacy penalty due to regularizer: ', penalty, '\n')
+          cat('dplr: alpha - penalty: ', alpha.use, '\n')
+      }
+      if (alpha.use > 0) {
+          res = do.perturb(alpha.use, lambda)
+      } else {
+          warning('dplr: regularizer too small, using alternative.')
+          lambda.adjust = cc/(n * (exp(alpha/4) - 1) )
+          res = do.perturb(alpha/2, lambda.adjust)
+          alpha.use = alpha/2
+          lambda = lambda.adjust
+          status = 'adjusted lambda'
+      }
+  }
+
+  if (!op) { # output perturbation
+      alpha.use = alpha
+      res = do.output(alpha.use, lambda)
+  }
 
   if (res$convergence > 0) { # positive means no convergence
-    status = 'nonconvergence'
+    status = paste(status, 'nonconvergence')
   }
-
-  if (!op) res$par = res$par + 1/(alpha*lambda*n) * sampleR(d,1) # output perturbation
 
   names(res$par) = colnames(x)
   class(res) = 'dplr'
