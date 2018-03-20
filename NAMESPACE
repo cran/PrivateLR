@@ -10,4 +10,20 @@ export(dplr,
        summary.dplr,
        print.summary.dplr,       
        scaled)
-       
+
+S3method(dplr, formula)
+S3method(dplr, numeric)
+S3method(dplr, factor)
+S3method(dplr, logical)
+S3method(dplr, data.frame)
+S3method(dplr, matrix)
+
+
+S3method(predict, dplr)
+S3method(print, dplr)
+S3method(print, summary.dplr)
+S3method(summary, dplr)
+
+importFrom("stats", "as.formula", "delete.response", "formula",
+             "model.frame", "model.matrix", "model.response", "optim",
+             "predict", "rexp", "rnorm", "terms")
